@@ -38,16 +38,15 @@
                 </div>
                 <div class="flex space-x-2">
                   <select
-                    v-model="statusFilter"
+                    v-model="projectTypeFilter"
                     @change="handleFilter"
                     class="px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
                     :disabled="isLoading"
                   >
-                  <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="">All Types</option>
+                    <option v-for="type in projectTypes" :key="type" :value="type">
+                      {{ formatStatus(type) }}
+                    </option>
                   </select>
                   <a :href="'/admin/projects/export/excel'" 
                      class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
@@ -82,7 +81,6 @@
                           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
                           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Files</th>
-                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody class="bg-white divide-y divide-gray-200">
@@ -103,10 +101,7 @@
                           <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {{ project.files_count || 0 }} files
                           </td>
-                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <a :href="`/admin/projects/${project.id}`" class="text-indigo-600 hover:text-indigo-900 mr-3">View</a>
-                            <a :href="`/admin/projects/${project.id}/edit`" class="text-indigo-600 hover:text-indigo-900">Edit</a>
-                          </td>
+                        
                         </tr>
                         <tr v-if="!isLoading && (!projectsList.data || projectsList.data.length === 0)">
                           <td colspan="5" class="px-6 py-4 text-center text-gray-500">
@@ -239,10 +234,8 @@ const getQueryParams = () => {
 // Props
 const props = defineProps({
   projects: { type: Object, default: () => ({}) },
-  filters: {
-    type: Object,
-    default: () => ({ client_name: '', project_type: '' })
-  },
+  filters: { type: Object, default: () => ({ client_name: '', project_type: '' }) },
+  projectTypes: { type: Array, default: () => [] },
   flash: { type: Object, default: () => ({ success: null, step: null }) },
   errors: { type: Object, default: () => ({}) }
 });
@@ -264,7 +257,7 @@ const projectsList = computed(() => {
 
 // Reactive state
 const search = ref(props.filters?.client_name || '');
-const statusFilter = ref(props.filters?.project_type || '');
+const projectTypeFilter = ref(props.filters?.project_type || '');
 
 // Methods
 const formatStatus = (status) => {
@@ -295,7 +288,10 @@ const fetchProjects = async (extra = {}) => {
     error.value = null;
     const params = {
       client_name: search.value?.trim() || undefined,
-      project_type: statusFilter.value?.trim() || undefined,
+      project_type:
+        projectTypeFilter.value && props.projectTypes.includes(projectTypeFilter.value)
+          ? projectTypeFilter.value.trim()
+          : undefined,
       ...extra,
     };
     const filteredParams = Object.fromEntries(
@@ -333,10 +329,10 @@ const fetchPage = (page) => {
 onMounted(() => {
   const params = getQueryParams();
   search.value = params.client_name || '';
-  statusFilter.value = params.project_type || '';
+  projectTypeFilter.value = params.project_type || '';
   fetchProjects();
 });
 
 // Watch for changes in search and filters
-watch([search, statusFilter], () => fetchProjects({ page: 1 }));
+watch([search, projectTypeFilter], () => fetchProjects({ page: 1 }));
 </script>
