@@ -155,9 +155,10 @@ routes/
 
 ### Running the Application
 
-**Full development environment:**
+
 ```bash
-npm run dev:full
+1.php artisan serve 
+2.npm run dev
 ```
 This starts:
 - Laravel development server (port 8000)
