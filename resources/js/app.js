@@ -1,7 +1,9 @@
 import './bootstrap';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
-// Ziggy is optional; using direct paths for simplicity
+import { ZiggyVue } from 'ziggy-js';
+import { Ziggy } from './ziggy';
+import BaseSearch from './Components/BaseSearch.vue';
 
 createInertiaApp({
   resolve: name => {
@@ -9,8 +11,20 @@ createInertiaApp({
     return pages[`./Pages/${name}.vue`];
   },
   setup({ el, App, props, plugin }) {
-    createApp({ render: () => h(App, props) })
-      .use(plugin)
-      .mount(el);
+    const app = createApp({ render: () => h(App, props) });
+    
+    // Use the Inertia plugin
+    app.use(plugin);
+    
+    // Use Ziggy for route generation
+    app.use(ZiggyVue, Ziggy);
+    
+    // Make route function available globally
+    app.config.globalProperties.$route = window.route;
+    
+    // Register global components
+    app.component('BaseSearch', BaseSearch);
+    
+    app.mount(el);
   },
 });

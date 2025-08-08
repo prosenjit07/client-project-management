@@ -272,7 +272,7 @@ class FileUploadService
             
             // For other disks (like S3), use the Storage facade to generate the URL
             try {
-                return Storage::disk($disk)->$url;
+                return Storage::disk($disk)->url($path);
             } catch (\Exception $urlException) {
                 // If URL generation fails, log the error and return null
                 Log::warning('Failed to generate URL using Storage facade', [

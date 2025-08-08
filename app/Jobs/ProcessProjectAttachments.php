@@ -36,34 +36,36 @@ class ProcessProjectAttachments implements ShouldQueue
         ]);
         
         // Store file metadata and move files to a temporary location
-        foreach ($attachments as $index => $file) {
-            if ($file->isValid()) {
+        foreach ($attachments as $index => $fileData) {
+            $file = $fileData['file'] ?? null;
+            
+            if ($file && $file->isValid()) {
                 // Store file in a temporary location
                 $tempPath = $file->store('temp/' . $projectId, 'local');
                 
                 Log::debug('Stored file in temp location', [
                     'project_id' => $projectId,
                     'file_index' => $index,
-                    'file_name' => $file->getClientOriginalName(),
+                    'file_name' => $fileData['original_name'] ?? $file->getClientOriginalName(),
                     'temp_path' => $tempPath,
-                    'file_size' => $file->getSize(),
-                    'file_mime' => $file->getClientMimeType()
+                    'file_size' => $fileData['size'] ?? $file->getSize(),
+                    'file_mime' => $fileData['mime_type'] ?? $file->getClientMimeType()
                 ]);
                 
                 $this->attachments[] = [
                     'temp_path' => $tempPath,
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getClientMimeType(),
-                    'extension' => $file->getClientOriginalExtension(),
-                    'size' => $file->getSize(),
+                    'original_name' => $fileData['original_name'] ?? $file->getClientOriginalName(),
+                    'mime_type' => $fileData['mime_type'] ?? $file->getClientMimeType(),
+                    'extension' => $fileData['extension'] ?? $file->getClientOriginalExtension(),
+                    'size' => $fileData['size'] ?? $file->getSize(),
                 ];
             } else {
                 Log::warning('Invalid file skipped', [
                     'project_id' => $projectId,
                     'file_index' => $index,
-                    'file_name' => $file->getClientOriginalName(),
-                    'error' => $file->getError(),
-                    'error_message' => $file->getErrorMessage()
+                    'file_data' => $fileData,
+                    'error' => $file ? $file->getError() : 'No file object',
+                    'error_message' => $file ? $file->getErrorMessage() : 'No file object in attachment data'
                 ]);
             }
         }
@@ -98,99 +100,59 @@ class ProcessProjectAttachments implements ShouldQueue
             }
             
             foreach ($this->attachments as $index => $fileInfo) {
-                $tempPath = $fileInfo['temp_path'] ?? null;
-                
-                if (!$tempPath || !Storage::disk('local')->exists($tempPath)) {
-                    Log::error('Temporary file not found', [
-                        'project_id' => $project->id,
-                        'temp_path' => $tempPath,
-                        'file_info' => $fileInfo
-                    ]);
-                    continue;
-                }
-                
-                // Generate a unique filename
-                $filename = uniqid() . '_' . $fileInfo['original_name'];
-                $destinationPath = $directory . '/' . $filename;
-                
-                // Move the file from temp to final location
-                Storage::disk('public')->put(
-                    $destinationPath,
-                    Storage::disk('local')->get($tempPath)
-                );
-                
-                // Delete the temp file
-                Storage::disk('local')->delete($tempPath);
-                
-                // Create a record in the database
-                $project->files()->create([
-                    'filename' => $filename,
-                    'original_name' => $fileInfo['original_name'],
-                    'mime_type' => $fileInfo['mime_type'],
-                    'size' => $fileInfo['size'],
-                    'path' => $destinationPath
-                ]);
-                
-                Log::info('File processed successfully', [
-                    'project_id' => $project->id,
-                    'original_name' => $fileInfo['original_name'],
-                    'stored_path' => $destinationPath
-                ]);
                 try {
-                    Log::debug('Storing file', [
-                        'project_id' => $project->id,
-                        'file_index' => $index,
-                        'original_name' => $fileInfo['originalName'],
-                        'size' => $fileInfo['size']
-                    ]);
+                    $tempPath = $fileInfo['temp_path'] ?? null;
+                    
+                    if (!$tempPath || !Storage::disk('local')->exists($tempPath)) {
+                        Log::error('Temporary file not found', [
+                            'project_id' => $project->id,
+                            'temp_path' => $tempPath,
+                            'file_info' => $fileInfo
+                        ]);
+                        continue;
+                    }
                     
                     // Generate a unique filename
-                    $filename = uniqid() . '.' . $fileInfo['extension'];
-                    $filePath = $directory . '/' . $filename;
+                    $filename = uniqid() . '_' . $fileInfo['original_name'];
+                    $destinationPath = $directory . '/' . $filename;
                     
-                    // Store the file content directly
-                    $stored = Storage::disk('public')->put($filePath, $fileInfo['content']);
+                    // Get the file content from temp storage
+                    $fileContent = Storage::disk('local')->get($tempPath);
+                    
+                    // Store the file in the public disk
+                    $stored = Storage::disk('public')->put($destinationPath, $fileContent);
                     
                     if (!$stored) {
-                        $error = "Failed to store file: " . $fileInfo['originalName'];
-                        Log::error($error, [
-                            'project_id' => $project->id,
-                            'file_path' => $filePath,
-                            'file_size' => $fileInfo['size']
-                        ]);
-                        throw new \RuntimeException($error);
+                        throw new \RuntimeException("Failed to store file in public disk");
                     }
                     
                     // Verify the file was stored
-                    if (!Storage::disk('public')->exists($filePath)) {
-                        $error = "File storage verification failed: " . $filePath;
-                        Log::error($error, [
-                            'project_id' => $project->id,
-                            'file_path' => $filePath
-                        ]);
-                        throw new \RuntimeException($error);
+                    if (!Storage::disk('public')->exists($destinationPath)) {
+                        throw new \RuntimeException("File storage verification failed: " . $destinationPath);
                     }
                     
-                    // Create the file record
-                    $fileRecord = ProjectFile::create([
-                        'project_id' => $project->id,
-                        'file_name' => $fileInfo['originalName'],
-                        'file_path' => $filePath,
-                        'file_type' => $fileInfo['mimeType'],
+                    // Delete the temp file
+                    Storage::disk('local')->delete($tempPath);
+                    
+                    // Create a record in the database
+                    $project->files()->create([
+                        'file_name' => $filename,
+                        'file_path' => $destinationPath,
+                        'file_type' => $fileInfo['mime_type'],
                     ]);
                     
-                    Log::info('File stored successfully', [
+                    Log::info('File processed and stored successfully', [
                         'project_id' => $project->id,
-                        'file_id' => $fileRecord->id,
-                        'file_path' => $filePath,
-                        'stored_size' => Storage::disk('public')->size($filePath)
+                        'original_name' => $fileInfo['original_name'],
+                        'stored_path' => $destinationPath,
+                        'file_size' => $fileInfo['size']
                     ]);
                     
                 } catch (\Exception $e) {
                     Log::error('Error processing file: ' . $e->getMessage(), [
-                        'project_id' => $this->projectId,
-                        'file' => $fileInfo['originalName'] ?? 'unknown',
-                        'exception' => $e
+                        'project_id' => $project->id,
+                        'file_info' => $fileInfo['original_name'] ?? 'unknown',
+                        'exception' => $e->getMessage()
                     ]);
                     continue;
                 }

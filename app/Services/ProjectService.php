@@ -65,22 +65,32 @@ class ProjectService
                 if (!empty($attachments)) {
                     $validAttachments = [];
                     
-                    foreach ($attachments as $file) {
+                    foreach ($attachments as $fileData) {
+                        $file = $fileData['file'] ?? null;
+                        
                         if ($file && $file->isValid()) {
-                            $validAttachments[] = $file;
+                            $validAttachments[] = [
+                                'file' => $file,
+                                'original_name' => $fileData['original_name'] ?? $file->getClientOriginalName(),
+                                'mime_type' => $fileData['mime_type'] ?? $file->getClientMimeType(),
+                                'size' => $fileData['size'] ?? $file->getSize(),
+                                'extension' => $fileData['extension'] ?? $file->getClientOriginalExtension()
+                            ];
+                            
                             Log::debug('Valid file found for processing', [
                                 'project_id' => $project->id,
-                                'file_name' => $file->getClientOriginalName(),
-                                'file_size' => $file->getSize(),
-                                'mime_type' => $file->getMimeType()
+                                'file_name' => $fileData['original_name'] ?? $file->getClientOriginalName(),
+                                'file_size' => $fileData['size'] ?? $file->getSize(),
+                                'mime_type' => $fileData['mime_type'] ?? $file->getMimeType()
                             ]);
                         } else {
                             Log::warning('Invalid file skipped', [
                                 'project_id' => $project->id,
-                                'file_name' => $file ? $file->getClientOriginalName() : 'null',
-                                'error' => $file ? $file->getError() : 'File is null',
-                                'is_uploaded' => $file ? 'Yes' : 'No',
-                                'is_valid' => $file && $file->isValid() ? 'Yes' : 'No'
+                                'file_data' => $fileData,
+                                'is_file' => $file ? 'Yes' : 'No',
+                                'is_valid' => $file && $file->isValid() ? 'Yes' : 'No',
+                                'error' => $file ? $file->getErrorMessage() : 'No file object',
+                                'error_code' => $file ? $file->getError() : 'N/A'
                             ]);
                         }
                     }
@@ -91,7 +101,9 @@ class ProjectService
                             'valid_files_count' => count($validAttachments)
                         ]);
                         
-                        ProcessProjectAttachments::dispatch($project->id, $validAttachments);
+                        // Run synchronously to ensure files are persisted immediately
+                        // This avoids requiring a queue worker for core functionality
+                        ProcessProjectAttachments::dispatchSync($project->id, $validAttachments);
                         
                         Log::info('ProcessProjectAttachments job dispatched', [
                             'project_id' => $project->id

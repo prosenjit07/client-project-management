@@ -27,8 +27,8 @@ class ProjectReportController extends Controller
         $projects = $this->projectService->getPaginatedProjects($request);
         $projectTypes = $this->projectService->getProjectTypes();
 
-        return Inertia::render('Client/Index', [
-            'filters' => $request->only(['client_name', 'project_type', 'start_date', 'end_date', 'sort_by', 'sort_dir']),
+        return Inertia::render('Admin/Index', [
+            'filters' => $request->only(['client_name', 'project_type']),
             'projects' => $projects,
             'projectTypes' => $projectTypes,
         ]);

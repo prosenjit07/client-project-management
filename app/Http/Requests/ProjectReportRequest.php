@@ -23,12 +23,26 @@ class ProjectReportRequest extends FormRequest
     {
         return [
             'client_name' => ['nullable', 'string', 'max:255'],
-            'project_type' => ['nullable', 'string', 'max:255'],
+            'project_type' => ['nullable', 'string', 'in:web_app,mobile_app,erp,e_commerce'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'sort_by' => ['nullable', 'string', 'in:project_name,estimated_budget,start_date,end_date'],
             'sort_dir' => ['nullable', 'string', 'in:asc,desc'],
         ];
+    }
+    
+    /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation()
+    {
+        // Convert empty strings to null for optional fields
+        $this->merge([
+            'client_name' => $this->client_name ?: null,
+            'project_type' => $this->project_type ?: null,
+            'start_date' => $this->start_date ?: null,
+            'end_date' => $this->end_date ?: null,
+        ]);
     }
 
     /**

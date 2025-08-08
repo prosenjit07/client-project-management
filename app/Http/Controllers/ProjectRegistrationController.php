@@ -62,10 +62,28 @@ class ProjectRegistrationController extends Controller
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
                     if ($file->isValid()) {
-                        $files[] = $file;
+                        $files[] = [
+                            'file' => $file,
+                            'original_name' => $file->getClientOriginalName(),
+                            'mime_type' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                            'extension' => $file->getClientOriginalExtension()
+                        ];
+                    } else {
+                        Log::warning('Invalid file uploaded', [
+                            'name' => $file->getClientOriginalName(),
+                            'error' => $file->getError(),
+                            'error_message' => $file->getErrorMessage()
+                        ]);
                     }
                 }
             }
+            
+            Log::info('Processing project registration', [
+                'client_email' => $clientData['email'],
+                'project_name' => $projectData['project_name'],
+                'file_count' => count($files)
+            ]);
             
             $project = $projectService->createProjectWithClientAndQueueFiles(
                 clientData: $clientData,
@@ -91,8 +109,3 @@ class ProjectRegistrationController extends Controller
         }
     }
 }
-
-
-
-
-
