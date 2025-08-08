@@ -183,54 +183,63 @@ function removeFile(index) {
   previews.value.splice(index, 1)
 }
 
-function submitForm() {
+async function submitForm() {
   isSubmitting.value = true
-  const formData = new FormData()
   
-  // Add all form data
-  Object.entries(formData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value)
-    }
-  })
-  
-  // Add files
-  files.value.forEach((file, index) => {
-    formData.append(`attachments[${index}]`, file)
-  })
-  
-  // Send all data in a single request
-  router.post('/projects/register/finalize', formData, {
-    forceFormData: true,
-    preserveScroll: true,
-    onError: (e) => {
-      isSubmitting.value = false
-      Object.assign(errors, e)
-      // If there are validation errors, go to the first step with errors
-      const errorFields = Object.keys(e)
-      if (errorFields.some(field => ['name', 'email', 'phone', 'industry', 'project_type'].includes(field))) {
-        step.value = 1
-      } else if (errorFields.some(field => ['project_name', 'start_date', 'end_date', 'estimated_budget', 'description'].includes(field))) {
-        step.value = 2
+  try {
+    // Create form data
+    const formDataToSend = new FormData()
+    
+    // Add all form data
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        formDataToSend.append(key, value)
       }
-    },
-    onSuccess: () => {
-      // Reset form
-      Object.keys(formData).forEach(key => {
-        if (Array.isArray(formData[key])) {
-          formData[key] = []
-        } else if (typeof formData[key] === 'object') {
-          formData[key] = {}
-        } else {
+    })
+    
+    // Add files
+    files.value.forEach((file) => {
+      formDataToSend.append('attachments[]', file)
+    })
+    
+    // Use Inertia's post method which handles CSRF automatically
+    await router.post('/projects/register/finalize', formDataToSend, {
+      forceFormData: true,
+      preserveScroll: true,
+      onSuccess: () => {
+        // Reset form on success
+        Object.keys(formData).forEach(key => {
           formData[key] = ''
+        })
+        files.value = []
+        previews.value = []
+        step.value = 1
+        
+        // Scroll to top to show success message
+        window.scrollTo(0, 0)
+      },
+      onError: (errors) => {
+        // Handle validation errors
+        if (errors) {
+          Object.assign(errors, errors)
+          // If there are validation errors, go to the first step with errors
+          const errorFields = Object.keys(errors)
+          if (errorFields.some(field => ['name', 'email', 'phone', 'industry', 'project_type'].includes(field))) {
+            step.value = 1
+          } else if (errorFields.some(field => ['project_name', 'start_date', 'end_date', 'estimated_budget', 'description'].includes(field))) {
+            step.value = 2
+          }
         }
-      })
-      files.value = []
-      previews.value = []
-      step.value = 1
-      isSubmitting.value = false
-    }
-  })
+      },
+      onFinish: () => {
+        isSubmitting.value = false
+      }
+    })
+  } catch (error) {
+    console.error('Error submitting form:', error)
+    isSubmitting.value = false
+    errors.error = 'An error occurred while submitting the form. Please try again.'
+  }
 }
 </script>
 

@@ -58,14 +58,26 @@ class ProjectRegistrationController extends Controller
             ];
 
             // Process the project creation and file uploads
+            $files = [];
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    if ($file->isValid()) {
+                        $files[] = $file;
+                    }
+                }
+            }
+            
             $project = $projectService->createProjectWithClientAndQueueFiles(
                 clientData: $clientData,
                 projectData: $projectData,
-                attachments: $request->file('attachments', [])
+                attachments: $files
             );
 
             return redirect()->route('project.register.create')
-                ->with('success', 'Project registered successfully! Reference: '.$project->id);
+                ->with([
+                    'success' => 'Project registered successfully! Project ID: '.$project->id,
+                    'step' => 1
+                ]);
                 
         } catch (\Exception $e) {
             Log::error('Error in project registration: ' . $e->getMessage(), [

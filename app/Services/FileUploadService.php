@@ -22,7 +22,7 @@ class FileUploadService
      * @throws \Exception
      */
     /**
-     * Default allowed mime types
+     * Default allowed mime types   
      *
      * @var array
      */

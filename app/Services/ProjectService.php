@@ -20,15 +20,33 @@ class ProjectService
     {
         $this->projectRepository = $projectRepository;
     }
+    /**
+     * Create a new project with client and queue file uploads
+     *
+     * @param array $clientData
+     * @param array $projectData
+     * @param array<\Illuminate\Http\UploadedFile> $attachments
+     * @return Project
+     * @throws \Exception
+     */
     public function createProjectWithClientAndQueueFiles(array $clientData, array $projectData, array $attachments = []): Project
     {
         return DB::transaction(function () use ($clientData, $projectData, $attachments) {
             try {
+                // Validate required fields
+                if (empty($clientData['name']) || empty($clientData['email'])) {
+                    throw new \InvalidArgumentException('Client name and email are required');
+                }
+                
+                if (empty($projectData['project_name'])) {
+                    throw new \InvalidArgumentException('Project name is required');
+                }
+
                 // Create client
                 $client = Client::create([
                     'name' => $clientData['name'],
                     'email' => $clientData['email'],
-                    'phone' => $clientData['phone'],
+                    'phone' => $clientData['phone'] ?? null,
                     'industry' => $clientData['industry'] ?? null,
                 ]);
 
@@ -36,7 +54,7 @@ class ProjectService
                 $project = Project::create([
                     'client_id' => $client->id,
                     'project_name' => $projectData['project_name'],
-                    'project_type' => $projectData['project_type'] ?? ($clientData['project_type'] ?? null),
+                    'project_type' => $projectData['project_type'] ?? ($clientData['project_type'] ?? 'web_app'),
                     'start_date' => $projectData['start_date'] ?? null,
                     'end_date' => $projectData['end_date'] ?? null,
                     'estimated_budget' => $projectData['estimated_budget'] ?? null,
@@ -45,16 +63,62 @@ class ProjectService
 
                 // Process any attachments in the background
                 if (!empty($attachments)) {
-                    ProcessProjectAttachments::dispatch($project->id, $attachments);
+                    $validAttachments = [];
+                    
+                    foreach ($attachments as $file) {
+                        if ($file && $file->isValid()) {
+                            $validAttachments[] = $file;
+                            Log::debug('Valid file found for processing', [
+                                'project_id' => $project->id,
+                                'file_name' => $file->getClientOriginalName(),
+                                'file_size' => $file->getSize(),
+                                'mime_type' => $file->getMimeType()
+                            ]);
+                        } else {
+                            Log::warning('Invalid file skipped', [
+                                'project_id' => $project->id,
+                                'file_name' => $file ? $file->getClientOriginalName() : 'null',
+                                'error' => $file ? $file->getError() : 'File is null',
+                                'is_uploaded' => $file ? 'Yes' : 'No',
+                                'is_valid' => $file && $file->isValid() ? 'Yes' : 'No'
+                            ]);
+                        }
+                    }
+                    
+                    if (!empty($validAttachments)) {
+                        Log::info('Dispatching ProcessProjectAttachments job', [
+                            'project_id' => $project->id,
+                            'valid_files_count' => count($validAttachments)
+                        ]);
+                        
+                        ProcessProjectAttachments::dispatch($project->id, $validAttachments);
+                        
+                        Log::info('ProcessProjectAttachments job dispatched', [
+                            'project_id' => $project->id
+                        ]);
+                    } else {
+                        Log::warning('No valid attachments to process', [
+                            'project_id' => $project->id,
+                            'total_attachments' => count($attachments)
+                        ]);
+                    }
+                } else {
+                    Log::info('No attachments to process', [
+                        'project_id' => $project->id
+                    ]);
                 }
 
-                return $project;
+                return $project->load('client');
+                
             } catch (\Exception $e) {
-                Log::error('Error creating project: ' . $e->getMessage(), [
+                Log::error('Error in createProjectWithClientAndQueueFiles: ' . $e->getMessage(), [
                     'client_data' => $clientData,
                     'project_data' => $projectData,
+                    'has_attachments' => !empty($attachments),
                     'exception' => $e
                 ]);
+                
+                // Re-throw the exception to trigger transaction rollback
                 throw $e;
             }
         });
