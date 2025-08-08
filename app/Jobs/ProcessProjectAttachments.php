@@ -19,8 +19,9 @@ class ProcessProjectAttachments implements ShouldQueue
 
     /** @var int */
     public int $projectId;
-    /** @var array<int, array> */
-    public array $attachments = [];
+    
+    /** @var array */
+    protected $attachments = [];
 
     /**
      * @param int $projectId
@@ -35,25 +36,25 @@ class ProcessProjectAttachments implements ShouldQueue
             'file_count' => count($attachments)
         ]);
         
-        // Store file content and metadata
+        // Store file metadata and move files to a temporary location
         foreach ($attachments as $index => $file) {
             if ($file->isValid()) {
-                $filePath = $file->getRealPath();
-                $fileContent = file_get_contents($filePath);
+                // Store file in a temporary location
+                $tempPath = $file->store('temp/' . $projectId, 'local');
                 
-                Log::debug('Processing file', [
+                Log::debug('Stored file in temp location', [
                     'project_id' => $projectId,
                     'file_index' => $index,
                     'file_name' => $file->getClientOriginalName(),
+                    'temp_path' => $tempPath,
                     'file_size' => $file->getSize(),
-                    'file_mime' => $file->getClientMimeType(),
-                    'content_length' => strlen($fileContent)
+                    'file_mime' => $file->getClientMimeType()
                 ]);
                 
                 $this->attachments[] = [
-                    'originalName' => $file->getClientOriginalName(),
-                    'mimeType' => $file->getClientMimeType(),
-                    'content' => $fileContent,
+                    'temp_path' => $tempPath,
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
                     'extension' => $file->getClientOriginalExtension(),
                     'size' => $file->getSize(),
                 ];
@@ -98,6 +99,44 @@ class ProcessProjectAttachments implements ShouldQueue
             }
             
             foreach ($this->attachments as $index => $fileInfo) {
+                $tempPath = $fileInfo['temp_path'] ?? null;
+                
+                if (!$tempPath || !Storage::disk('local')->exists($tempPath)) {
+                    Log::error('Temporary file not found', [
+                        'project_id' => $project->id,
+                        'temp_path' => $tempPath,
+                        'file_info' => $fileInfo
+                    ]);
+                    continue;
+                }
+                
+                // Generate a unique filename
+                $filename = uniqid() . '_' . $fileInfo['original_name'];
+                $destinationPath = $directory . '/' . $filename;
+                
+                // Move the file from temp to final location
+                Storage::disk('public')->put(
+                    $destinationPath,
+                    Storage::disk('local')->get($tempPath)
+                );
+                
+                // Delete the temp file
+                Storage::disk('local')->delete($tempPath);
+                
+                // Create a record in the database
+                $project->files()->create([
+                    'filename' => $filename,
+                    'original_name' => $fileInfo['original_name'],
+                    'mime_type' => $fileInfo['mime_type'],
+                    'size' => $fileInfo['size'],
+                    'path' => $destinationPath
+                ]);
+                
+                Log::info('File processed successfully', [
+                    'project_id' => $project->id,
+                    'original_name' => $fileInfo['original_name'],
+                    'stored_path' => $destinationPath
+                ]);
                 try {
                     Log::debug('Storing file', [
                         'project_id' => $project->id,

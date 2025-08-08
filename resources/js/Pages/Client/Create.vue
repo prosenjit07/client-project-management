@@ -190,6 +190,8 @@ async function submitForm() {
     // Create form data
     const formDataToSend = new FormData()
     
+    console.log('Form data before submission:', formData)
+    
     // Add all form data
     Object.entries(formData).forEach(([key, value]) => {
       if (value !== null && value !== undefined && value !== '') {
@@ -200,13 +202,28 @@ async function submitForm() {
     // Add files
     files.value.forEach((file) => {
       formDataToSend.append('attachments[]', file)
+      console.log('Adding file:', file.name, 'size:', file.size, 'type:', file.type)
     })
+    
+    // Log form data for debugging
+    for (let pair of formDataToSend.entries()) {
+      console.log(pair[0] + ': ', pair[1])
+    }
+    
+    // Add CSRF token manually as a fallback
+    const token = document.head.querySelector('meta[name="csrf-token"]')
+    if (token) {
+      formDataToSend.append('_token', token.content)
+    }
+    
+    console.log('Submitting form to /projects/register/finalize')
     
     // Use Inertia's post method which handles CSRF automatically
     await router.post('/projects/register/finalize', formDataToSend, {
       forceFormData: true,
       preserveScroll: true,
-      onSuccess: () => {
+      onSuccess: (page) => {
+        console.log('Form submission successful', page)
         // Reset form on success
         Object.keys(formData).forEach(key => {
           formData[key] = ''
@@ -219,27 +236,39 @@ async function submitForm() {
         window.scrollTo(0, 0)
       },
       onError: (errors) => {
+        console.error('Form submission errors:', errors)
         // Handle validation errors
         if (errors) {
-          Object.assign(errors, errors)
-          // If there are validation errors, go to the first step with errors
-          const errorFields = Object.keys(errors)
-          if (errorFields.some(field => ['name', 'email', 'phone', 'industry', 'project_type'].includes(field))) {
-            step.value = 1
-          } else if (errorFields.some(field => ['project_name', 'start_date', 'end_date', 'estimated_budget', 'description'].includes(field))) {
-            step.value = 2
+          // Make sure we have a proper errors object
+          if (typeof errors === 'object') {
+            // Update the errors ref
+            Object.keys(errors).forEach(key => {
+              errors[key] = Array.isArray(errors[key]) ? errors[key][0] : errors[key]
+            })
+            
+            // If there are validation errors, go to the first step with errors
+            const errorFields = Object.keys(errors)
+            if (errorFields.some(field => ['name', 'email', 'phone', 'industry', 'project_type'].includes(field))) {
+              step.value = 1
+            } else if (errorFields.some(field => ['project_name', 'start_date', 'end_date', 'estimated_budget', 'description'].includes(field))) {
+              step.value = 2
+            }
+          } else {
+            // Handle non-validation errors
+            errors.error = 'An unexpected error occurred. Please try again.'
           }
         }
       },
       onFinish: () => {
+        console.log('Form submission finished')
         isSubmitting.value = false
       }
     })
   } catch (error) {
-    console.error('Error submitting form:', error)
-    isSubmitting.value = false
-    errors.error = 'An error occurred while submitting the form. Please try again.'
-  }
+    console.error('Error in form submission:', error);
+    isSubmitting.value = false;
+    errors.error = 'An error occurred while submitting the form. Please try again.';
+  }  
 }
 </script>
 
