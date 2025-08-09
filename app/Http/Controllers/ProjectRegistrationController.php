@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Http\Requests\ProjectRegistrationRequest;
 
 class ProjectRegistrationController extends Controller
 {
@@ -16,7 +17,7 @@ class ProjectRegistrationController extends Controller
         return Inertia::render('Client/Create');
     }
 
-    public function finalize(\App\Http\Requests\ProjectRegistrationRequest $request, ProjectService $projectService): RedirectResponse
+    public function finalize(ProjectRegistrationRequest $request, ProjectService $projectService): RedirectResponse
     {
         try {
             // All validation handled by ProjectRegistrationRequest
