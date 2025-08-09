@@ -1,3 +1,36 @@
+<script setup>
+import { ref } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import {
+  ClipboardCheckIcon,
+  UserGroupIcon,
+  ChartBarIcon,
+  DocumentReportIcon,
+} from '@heroicons/vue/outline';
+
+const features = [
+  {
+    name: 'Project Tracking',
+    description: 'Easily track the progress of all your projects in one place with our intuitive dashboard.',
+    icon: ClipboardCheckIcon,
+  },
+  {
+    name: 'Client Management',
+    description: 'Keep all client information organized and easily accessible for your team.',
+    icon: UserGroupIcon,
+  },
+  {
+    name: 'Analytics & Reporting',
+    description: 'Generate detailed reports and gain insights into your project performance.',
+    icon: ChartBarIcon,
+  },
+  {
+    name: 'Document Management',
+    description: 'Store and manage all project-related documents in a centralized location.',
+    icon: DocumentReportIcon,
+  },
+];
+</script>
 <template>
   <div class="min-h-screen bg-gray-50">
     <!-- Hero Section -->
@@ -64,36 +97,3 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
-import {
-  ClipboardCheckIcon,
-  UserGroupIcon,
-  ChartBarIcon,
-  DocumentReportIcon,
-} from '@heroicons/vue/outline';
-
-const features = [
-  {
-    name: 'Project Tracking',
-    description: 'Easily track the progress of all your projects in one place with our intuitive dashboard.',
-    icon: ClipboardCheckIcon,
-  },
-  {
-    name: 'Client Management',
-    description: 'Keep all client information organized and easily accessible for your team.',
-    icon: UserGroupIcon,
-  },
-  {
-    name: 'Analytics & Reporting',
-    description: 'Generate detailed reports and gain insights into your project performance.',
-    icon: ChartBarIcon,
-  },
-  {
-    name: 'Document Management',
-    description: 'Store and manage all project-related documents in a centralized location.',
-    icon: DocumentReportIcon,
-  },
-];
-</script>

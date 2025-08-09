@@ -1,3 +1,154 @@
+
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue';
+import { router } from '@inertiajs/vue3';
+import BaseSearch from '@/Components/BaseSearch.vue';
+
+// Debounce function
+const debounce = (fn, delay) => {
+  let timeoutId;
+  return function (...args) {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn.apply(this, args), delay);
+  };
+};
+
+// URL handling methods - client-side only
+const updateQueryParams = (params) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        searchParams.set(key, value);
+      }
+    });
+    const queryString = searchParams.toString();
+    const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ''}`;
+    if (window.history.replaceState) {
+      window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
+    }
+  } catch (error) {
+    console.error('Error updating query params:', error);
+  }
+};
+
+const getQueryParams = () => {
+  if (typeof window === 'undefined') return {};
+  try {
+    return Object.fromEntries(new URLSearchParams(window.location.search));
+  } catch (error) {
+    console.error('Error getting query params:', error);
+    return {};
+  }
+};
+
+// Props
+const props = defineProps({
+  projects: { type: Object, default: () => ({}) },
+  filters: { type: Object, default: () => ({ client_name: '', project_type: '' }) },
+  projectTypes: { type: Array, default: () => [] },
+  flash: { type: Object, default: () => ({ success: null, step: null }) },
+  errors: { type: Object, default: () => ({}) }
+});
+
+// Normalize paginator shape for safe template access
+const projectsList = computed(() => {
+  const p = props.projects || {};
+  return {
+    data: Array.isArray(p.data) ? p.data : [],
+    current_page: p.current_page ?? 1,
+    last_page: p.last_page ?? 1,
+    total: p.total ?? 0,
+    from: p.from ?? 0,
+    to: p.to ?? 0,
+    next_page_url: p.next_page_url ?? null,
+    prev_page_url: p.prev_page_url ?? null,
+  };
+});
+
+// Reactive state
+const search = ref(props.filters?.client_name || '');
+const projectTypeFilter = ref(props.filters?.project_type || '');
+
+// Methods
+const formatStatus = (status) => {
+  if (!status) return 'N/A';
+  return status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+const getStatusBadgeClass = (status) => {
+  const statusMap = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    in_progress: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
+    default: 'bg-gray-100 text-gray-800',
+  };
+  return statusMap[status?.toLowerCase()] || statusMap.default;
+};
+
+const isLoading = ref(false);
+const error = ref(null);
+
+const fetchProjects = async (extra = {}) => {
+  try {
+    isLoading.value = true;
+    error.value = null;
+    const params = {
+      client_name: search.value?.trim() || undefined,
+      project_type:
+        projectTypeFilter.value && props.projectTypes.includes(projectTypeFilter.value)
+          ? projectTypeFilter.value.trim()
+          : undefined,
+      ...extra,
+    };
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== '')
+    );
+    const queryString = new URLSearchParams(filteredParams).toString();
+    const url = '/admin/projects' + (queryString ? `?${queryString}` : '');
+    await router.get(url, {}, {
+      preserveState: true,
+      replace: true,
+      only: ['projects', 'filters'],
+      onSuccess: () => updateQueryParams(filteredParams),
+      onError: (errors) => {
+        error.value = errors?.message || 'Failed to load projects. Please try again.';
+        console.error('Error fetching projects:', errors);
+      },
+    });
+  } catch (err) {
+    error.value = err?.message || 'An unexpected error occurred. Please try again.';
+    console.error('Error in fetchProjects:', err);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const handleSearch = debounce(() => fetchProjects({ page: 1 }), 500);
+const handleFilter = () => fetchProjects({ page: 1 });
+
+const fetchPage = (page) => {
+  if (!page || page < 1 || page === projectsList.value.current_page) return;
+  fetchProjects({ page });
+};
+
+// Initialize filters from URL on component mount
+onMounted(() => {
+  const params = getQueryParams();
+  search.value = params.client_name || '';
+  projectTypeFilter.value = params.project_type || '';
+  fetchProjects();
+});
+
+// Watch for changes in search and filters
+watch([search, projectTypeFilter], () => fetchProjects({ page: 1 }));
+</script>
+
 <template>
   <div class="min-h-screen bg-gray-100">
     <div class="py-12">
@@ -186,153 +337,3 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, computed, onMounted, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
-import BaseSearch from '@/Components/BaseSearch.vue';
-
-// Debounce function
-const debounce = (fn, delay) => {
-  let timeoutId;
-  return function (...args) {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn.apply(this, args), delay);
-  };
-};
-
-// URL handling methods - client-side only
-const updateQueryParams = (params) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== null && value !== undefined && value !== '') {
-        searchParams.set(key, value);
-      }
-    });
-    const queryString = searchParams.toString();
-    const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ''}`;
-    if (window.history.replaceState) {
-      window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
-    }
-  } catch (error) {
-    console.error('Error updating query params:', error);
-  }
-};
-
-const getQueryParams = () => {
-  if (typeof window === 'undefined') return {};
-  try {
-    return Object.fromEntries(new URLSearchParams(window.location.search));
-  } catch (error) {
-    console.error('Error getting query params:', error);
-    return {};
-  }
-};
-
-// Props
-const props = defineProps({
-  projects: { type: Object, default: () => ({}) },
-  filters: { type: Object, default: () => ({ client_name: '', project_type: '' }) },
-  projectTypes: { type: Array, default: () => [] },
-  flash: { type: Object, default: () => ({ success: null, step: null }) },
-  errors: { type: Object, default: () => ({}) }
-});
-
-// Normalize paginator shape for safe template access
-const projectsList = computed(() => {
-  const p = props.projects || {};
-  return {
-    data: Array.isArray(p.data) ? p.data : [],
-    current_page: p.current_page ?? 1,
-    last_page: p.last_page ?? 1,
-    total: p.total ?? 0,
-    from: p.from ?? 0,
-    to: p.to ?? 0,
-    next_page_url: p.next_page_url ?? null,
-    prev_page_url: p.prev_page_url ?? null,
-  };
-});
-
-// Reactive state
-const search = ref(props.filters?.client_name || '');
-const projectTypeFilter = ref(props.filters?.project_type || '');
-
-// Methods
-const formatStatus = (status) => {
-  if (!status) return 'N/A';
-  return status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-};
-
-const getStatusBadgeClass = (status) => {
-  const statusMap = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    in_progress: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-    default: 'bg-gray-100 text-gray-800',
-  };
-  return statusMap[status?.toLowerCase()] || statusMap.default;
-};
-
-const isLoading = ref(false);
-const error = ref(null);
-
-const fetchProjects = async (extra = {}) => {
-  try {
-    isLoading.value = true;
-    error.value = null;
-    const params = {
-      client_name: search.value?.trim() || undefined,
-      project_type:
-        projectTypeFilter.value && props.projectTypes.includes(projectTypeFilter.value)
-          ? projectTypeFilter.value.trim()
-          : undefined,
-      ...extra,
-    };
-    const filteredParams = Object.fromEntries(
-      Object.entries(params).filter(([_, v]) => v !== undefined && v !== '')
-    );
-    const queryString = new URLSearchParams(filteredParams).toString();
-    const url = '/admin/projects' + (queryString ? `?${queryString}` : '');
-    await router.get(url, {}, {
-      preserveState: true,
-      replace: true,
-      only: ['projects', 'filters'],
-      onSuccess: () => updateQueryParams(filteredParams),
-      onError: (errors) => {
-        error.value = errors?.message || 'Failed to load projects. Please try again.';
-        console.error('Error fetching projects:', errors);
-      },
-    });
-  } catch (err) {
-    error.value = err?.message || 'An unexpected error occurred. Please try again.';
-    console.error('Error in fetchProjects:', err);
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-const handleSearch = debounce(() => fetchProjects({ page: 1 }), 500);
-const handleFilter = () => fetchProjects({ page: 1 });
-
-const fetchPage = (page) => {
-  if (!page || page < 1 || page === projectsList.value.current_page) return;
-  fetchProjects({ page });
-};
-
-// Initialize filters from URL on component mount
-onMounted(() => {
-  const params = getQueryParams();
-  search.value = params.client_name || '';
-  projectTypeFilter.value = params.project_type || '';
-  fetchProjects();
-});
-
-// Watch for changes in search and filters
-watch([search, projectTypeFilter], () => fetchProjects({ page: 1 }));
-</script>
