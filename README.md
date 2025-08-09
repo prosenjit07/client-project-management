@@ -15,7 +15,7 @@ A comprehensive Laravel-based project management application designed to streaml
 ## 🏗️ Architecture
 
 ### Tech Stack
-- **Backend**: Laravel 12.x (PHP 8.2+)
+- **Backend**: Laravel 11 (Service Layer Pattern)
 - **Frontend**: Vue.3 with Inertia.js
 - **Styling**: Tailwind CSS 4.0
 - **Build Tool**: Vite
