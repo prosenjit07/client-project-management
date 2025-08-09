@@ -80,7 +80,7 @@ class ProjectRegistrationController extends Controller
                     'step' => 1
                 ]);
                 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error in project registration: ' . $e->getMessage(), [
                 'exception' => $e,
                 'request_data' => $request->except(['attachments'])
