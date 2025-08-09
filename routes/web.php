@@ -5,16 +5,18 @@ use Inertia\Inertia;
 use App\Http\Controllers\ProjectRegistrationController;
 use App\Http\Controllers\Admin\ProjectReportController;
 
+Route::get('/', fn() => Inertia::render('Index'))->name('home');
 
-Route::get('/', function () {
-    return Inertia::render('Index');
-})->name('home');
+Route::controller(ProjectRegistrationController::class)->group(function () {
+    Route::get('/projects/register', 'create')->name('project.register.create');
+    Route::post('/projects/register/finalize', 'finalize')->name('project.register.finalize');
+});
 
-// Project Registration (Inertia wizard)
-Route::get('/projects/register', [ProjectRegistrationController::class, 'create'])->name('project.register.create');
-Route::post('/projects/register/finalize', [ProjectRegistrationController::class, 'finalize'])->name('project.register.finalize');
 
-// Admin Reports
-Route::get('/admin/projects', [ProjectReportController::class, 'index'])->name('admin.projects.index');
-Route::get('/admin/projects/export/excel', [ProjectReportController::class, 'exportExcel'])->name('admin.projects.export.excel');
-Route::get('/admin/projects/export/pdf', [ProjectReportController::class, 'exportPdf'])->name('admin.projects.export.pdf');
+Route::prefix('admin/projects')->name('admin.projects.')->group(function () {
+    Route::resource('/', ProjectReportController::class)->only(['index'])->names([
+        'index' => 'index'
+    ]);
+    Route::get('/export/excel', [ProjectReportController::class, 'exportExcel'])->name('export.excel');
+    Route::get('/export/pdf', [ProjectReportController::class, 'exportPdf'])->name('export.pdf');
+});
